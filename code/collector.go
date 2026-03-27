@@ -106,7 +106,10 @@ func CollectMetrics(cfg *Config) (*SystemSnapshot, error) {
 
 	// Step 5: Temperature
 	if cfg.IsMetricEnabled(MetricTemperature) {
-		snap.Temperatures = readTemperatures()
+		snap.Temperatures, err = readTemperatures()
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", ErrMetricCollect, err)
+		}
 	}
 
 	// Step 6: Probe
@@ -154,6 +157,9 @@ func readCPUTimes() (*cpuTimes, error) {
 			return &cpuTimes{total: total, idle: idle}, nil
 		}
 	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("scan /proc/stat: %w", err)
+	}
 	return nil, fmt.Errorf("/proc/stat: no cpu line found")
 }
 
@@ -171,14 +177,20 @@ func readMemInfo() (totalKB, availKB uint64, err error) {
 		if strings.HasPrefix(line, "MemTotal:") {
 			fields := strings.Fields(line)
 			if len(fields) >= 2 {
-				totalKB, _ = strconv.ParseUint(fields[1], 10, 64)
+				totalKB, err = strconv.ParseUint(fields[1], 10, 64)
+				if err != nil {
+					return 0, 0, fmt.Errorf("parse MemTotal: %w", err)
+				}
 				gotTotal = true
 			}
 		}
 		if strings.HasPrefix(line, "MemAvailable:") {
 			fields := strings.Fields(line)
 			if len(fields) >= 2 {
-				availKB, _ = strconv.ParseUint(fields[1], 10, 64)
+				availKB, err = strconv.ParseUint(fields[1], 10, 64)
+				if err != nil {
+					return 0, 0, fmt.Errorf("parse MemAvailable: %w", err)
+				}
 				gotAvail = true
 			}
 		}
@@ -188,6 +200,9 @@ func readMemInfo() (totalKB, availKB uint64, err error) {
 	}
 	if !gotTotal || !gotAvail {
 		return 0, 0, fmt.Errorf("/proc/meminfo: missing MemTotal or MemAvailable")
+	}
+	if err := scanner.Err(); err != nil {
+		return 0, 0, fmt.Errorf("scan /proc/meminfo: %w", err)
 	}
 	return totalKB, availKB, nil
 }
@@ -234,37 +249,46 @@ func readNetDev() (rx, tx uint64, err error) {
 		if len(fields) < 10 {
 			continue
 		}
-		rxVal, _ := strconv.ParseUint(fields[0], 10, 64)
-		txVal, _ := strconv.ParseUint(fields[8], 10, 64)
-		rx += rxVal
-		tx += txVal
+			rxVal, err := strconv.ParseUint(fields[0], 10, 64)
+			if err != nil {
+				return 0, 0, fmt.Errorf("parse rx bytes for %s: %w", ifName, err)
+			}
+			txVal, err := strconv.ParseUint(fields[8], 10, 64)
+			if err != nil {
+				return 0, 0, fmt.Errorf("parse tx bytes for %s: %w", ifName, err)
+			}
+			rx += rxVal
+			tx += txVal
+		}
+	if err := scanner.Err(); err != nil {
+		return 0, 0, fmt.Errorf("scan /proc/net/dev: %w", err)
 	}
 	return rx, tx, nil
 }
 
-func readTemperatures() []TemperatureReading {
+func readTemperatures() ([]TemperatureReading, error) {
 	var readings []TemperatureReading
 	matches, err := filepath.Glob("/sys/class/thermal/thermal_zone*/temp")
 	if err != nil || len(matches) == 0 {
-		return readings
+		return readings, nil
 	}
 	for _, path := range matches {
 		zone := filepath.Base(filepath.Dir(path))
 		data, err := os.ReadFile(path)
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("read %s: %w", path, err)
 		}
 		val := strings.TrimSpace(string(data))
 		milliC, err := strconv.ParseFloat(val, 64)
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("parse %s: %w", path, err)
 		}
 		readings = append(readings, TemperatureReading{
 			Zone:    zone,
 			Celsius: milliC / 1000.0,
 		})
 	}
-	return readings
+	return readings, nil
 }
 
 func doProbe(endpoint string) (bool, uint64) {

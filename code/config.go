@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"regexp"
 )
@@ -89,11 +90,25 @@ func validateConfig(cfg *Config) error {
 	if cfg.ProbeEndpoint == "" {
 		return fmt.Errorf("probe_endpoint must not be empty")
 	}
+	parsedURL, err := url.Parse(cfg.ProbeEndpoint)
+	if err != nil || parsedURL.Scheme == "" || parsedURL.Host == "" {
+		return fmt.Errorf("invalid probe_endpoint: %q", cfg.ProbeEndpoint)
+	}
 
 	// Verify exactly one entry per MetricSource
 	allSources := []MetricSource{MetricCPU, MetricMemory, MetricDisk, MetricNetwork, MetricTemperature, MetricProbe}
+	validSources := make(map[MetricSource]struct{}, len(allSources))
+	for _, s := range allSources {
+		validSources[s] = struct{}{}
+	}
 	sourceCount := make(map[MetricSource]int)
 	for _, m := range cfg.Metrics {
+		if m.Name == "" {
+			return fmt.Errorf("metric name must not be empty for source %s", m.Source)
+		}
+		if _, ok := validSources[m.Source]; !ok {
+			return fmt.Errorf("unknown metric source: %s", m.Source)
+		}
 		sourceCount[m.Source]++
 	}
 	for _, s := range allSources {

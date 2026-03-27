@@ -5,6 +5,8 @@ import (
 	"embed"
 	"encoding/json"
 	"log"
+	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -15,6 +17,8 @@ import (
 
 //go:embed dashboard.html
 var dashboardFS embed.FS
+
+var listenFunc = net.Listen
 
 // Monitor holds the ring buffer and current state.
 type Monitor struct {
@@ -59,11 +63,55 @@ func (m *Monitor) GetDashboardData() *DashboardData {
 	return data
 }
 
+func buildHandler(monitor *Monitor) http.Handler {
+	mux := http.NewServeMux()
+
+	// Step 4: Serve GET / → embedded HTML dashboard
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		data, err := dashboardFS.ReadFile("dashboard.html")
+		if err != nil {
+			http.Error(w, "dashboard not found", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write(data)
+	})
+
+	// Step 5: Serve GET /api/data → DashboardData as JSON
+	mux.HandleFunc("/api/data", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		dashData := monitor.GetDashboardData()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(dashData)
+	})
+
+	return mux
+}
+
 // ServeDashboard starts the HTTP server and background collection.
 func ServeDashboard(cfg *Config) error {
 	monitor := NewMonitor(cfg)
 
-	// Step 2: Perform one initial collection before accepting requests
+	// Step 1: Bind first so bind failures are reported before collection starts.
+	listener, err := listenFunc("tcp", cfg.ListenAddr)
+	if err != nil {
+		log.Printf("bind failed: %v", err)
+		return fmt.Errorf("%s: %w", ErrBindFailed, err)
+	}
+	defer listener.Close()
+
+	// Step 2: Perform one initial collection before accepting requests.
 	snap, err := CollectMetrics(cfg)
 	if err != nil {
 		log.Printf("initial metric collection failed: %v", err)
@@ -71,7 +119,7 @@ func ServeDashboard(cfg *Config) error {
 	}
 	monitor.AddSnapshot(snap)
 
-	// Step 3: Start background collection goroutine
+	// Step 3: Start background collection goroutine.
 	intervalSecs := cfg.CollectIntervalSeconds()
 	ticker := time.NewTicker(time.Duration(intervalSecs) * time.Second)
 	stopCollect := make(chan struct{})
@@ -92,33 +140,9 @@ func ServeDashboard(cfg *Config) error {
 		}
 	}()
 
-	mux := http.NewServeMux()
-
-	// Step 4: Serve GET / → embedded HTML dashboard
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
-			http.NotFound(w, r)
-			return
-		}
-		data, err := dashboardFS.ReadFile("dashboard.html")
-		if err != nil {
-			http.Error(w, "dashboard not found", http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write(data)
-	})
-
-	// Step 5: Serve GET /api/data → DashboardData as JSON
-	mux.HandleFunc("/api/data", func(w http.ResponseWriter, r *http.Request) {
-		dashData := monitor.GetDashboardData()
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(dashData)
-	})
-
 	server := &http.Server{
 		Addr:    cfg.ListenAddr,
-		Handler: mux,
+		Handler: buildHandler(monitor),
 	}
 
 	// Step 6: Graceful shutdown on SIGTERM/SIGINT
@@ -135,8 +159,7 @@ func ServeDashboard(cfg *Config) error {
 	}()
 
 	log.Printf("listening on %s", cfg.ListenAddr)
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Printf("bind failed: %v", err)
+	if err := server.Serve(listener); err != nil && err != http.ErrServerClosed {
 		return err
 	}
 	return nil
