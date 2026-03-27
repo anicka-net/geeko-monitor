@@ -1,0 +1,18 @@
+// Geeko Monitor Translation Workflow
+// Rendered with Pikchr (https://pikchr.org)
+
+box "Spec" "geeko-monitor.md" fit
+arrow
+box "Template" "backend-service" ".template.md" fit
+arrow
+box "Phase 1" "Core" "Implementation" fit color green
+arrow
+box "Phase 2" "Service &" "Packaging" fit color blue
+arrow
+box "Phase 3" "Test" "Infrastructure" fit color orange
+arrow
+box "Phase 4" "Documentation" fit color purple
+arrow
+box "Phase 5" "Compile" "Gate" fit color red
+arrow
+box "Phase 6" "Translation" "Report" fit color gray

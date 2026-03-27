@@ -1,0 +1,13 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	go build -o geeko-monitor .
+
+override_dh_auto_install:
+	install -D -m 0755 geeko-monitor debian/geeko-monitor/usr/bin/geeko-monitor
+	install -D -m 0644 geeko-monitor.service debian/geeko-monitor/usr/lib/systemd/system/geeko-monitor.service
+
+override_dh_auto_test:

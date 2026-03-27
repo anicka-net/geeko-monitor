@@ -1,0 +1,15 @@
+[Unit]
+Description=Geeko Monitor
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/geeko-monitor config=/etc/geeko-monitor/config.json
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+User=geeko-monitor
+Group=geeko-monitor
+
+[Install]
+WantedBy=multi-user.target

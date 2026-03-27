@@ -1,0 +1,15 @@
+Source: geeko-monitor
+Section: admin
+Priority: optional
+Maintainer: Anna Maresova <amaresova@suse.com>
+Build-Depends: debhelper-compat (= 13), golang-go (>= 2:1.21~)
+Standards-Version: 4.6.2
+Homepage: https://github.com/suse/geeko-monitor
+
+Package: geeko-monitor
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: System health monitoring dashboard
+ Geeko Monitor is a system health monitoring dashboard that runs as a
+ systemd service and serves a web UI with live-updating gauges and charts
+ for CPU, memory, disk, network, and temperature metrics.
