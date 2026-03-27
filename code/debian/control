@@ -1,7 +1,7 @@
 Source: geeko-monitor
 Section: admin
 Priority: optional
-Maintainer: Anna Maresova <amaresova@suse.com>
+Maintainer: Anna Maresova <anicka@suse.com>
 Build-Depends: debhelper-compat (= 13), golang-go (>= 2:1.21~)
 Standards-Version: 4.6.2
 Homepage: https://github.com/suse/geeko-monitor

@@ -245,4 +245,4 @@ MIT — see [LICENSE](LICENSE) for the full text.
 
 ## Author
 
-Anna Maresova &lt;amaresova@suse.com&gt; — SUSE LLC
+Anna Maresova <anicka@suse.com> — SUSE LLC

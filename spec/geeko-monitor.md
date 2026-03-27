@@ -18,7 +18,7 @@ health via the dashboard data.
 Deployment:   backend-service
 Version:      0.2.0
 Spec-Schema:  0.3.16
-Author:       Anna Maresova <amaresova@suse.com>
+Author:       Anna Maresova <anicka@suse.com>
 License:      MIT
 Verification: none
 Safety-Level: QM
